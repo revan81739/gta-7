@@ -9,11 +9,6 @@ size = Vector2(199, 84)
 [node name="Player" type="CharacterBody2D" unique_id=1879872501]
 script = ExtResource("1_onrkg")
 
-[node name="Sprite2D2" type="Sprite2D" parent="." unique_id=928111433]
-position = Vector2(90.00003, 55.00003)
-scale = Vector2(34.6875, 14.328125)
-texture = ExtResource("1_4flbx")
-
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1496363468]
 position = Vector2(47.500004, -14.5)
 scale = Vector2(1.7421875, 0.7734375)

@@ -1,96 +1,86 @@
 extends CharacterBody2D
 
-@export_group("Movement")
-@export var normal_speed: float = 350.0
-@export var acceleration: float = 12.0
-@export var friction: float = 8.0
+@export var speed: float = 300.0
+@export var dash_multiplier: float = 2.5
+@export var dash_duration: float = 0.2
+@export var dash_cooldown: float = 1.0
 
-@export_group("Dash")
-@export var dash_speed: float = 900.0
-@export var dash_duration: float = 0.15
-@export var dash_cooldown: float = 0.8
+# Health System
+var max_health: int = 9
+var current_health: int = 9
 
-var dash_timer: float = 0.0
-var dash_cooldown_timer: float = 0.0
-var dash_direction: Vector2 = Vector2.ZERO
-
-@export_group("Health System")
-@export var max_health: int = 100
-var current_health: int = 100
-
-# H-key delay / debounce variables
-var h_delay: float = 0.4
-var h_timer: float = 0.0
+# Dash State Variables
+var is_dashing: bool = false
+var dash_time_left: float = 0.0
+var dash_cooldown_left: float = 0.0
+var last_movement_dir: Vector2 = Vector2.RIGHT
 
 func _ready() -> void:
-	current_health = max_health
-	print("Spaceship initialized. Press 'H' to test taking damage.")
+	print("========================================")
+	print("[TERMINAL] Spaceship Initialized.")
+	print("[TERMINAL] Max Health: %d | Current Health: %d" % [max_health, current_health])
+	print("[TERMINAL] Controls: WASD to Fly | SHIFT to Dash | H to Take 3 Damage")
+	print("========================================")
+
+func _input(event: InputEvent) -> void:
+	# Dash Mechanic (Triggered by pressing Shift)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SHIFT:
+		if not is_dashing and dash_cooldown_left <= 0:
+			is_dashing = true
+			dash_time_left = dash_duration
+			dash_cooldown_left = dash_cooldown
+			print("[TERMINAL] >> DASH TRIGGERED! Speed boosted.")
+
+	# Health Damage Test (Triggered by pressing H)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
+		take_damage(3)
 
 func _physics_process(delta: float) -> void:
-	# Update timers
-	if dash_timer > 0:
-		dash_timer -= delta
-	if dash_cooldown_timer > 0:
-		dash_cooldown_timer -= delta
-	if h_timer > 0:
-		h_timer -= delta
+	# Handle dash cooldown countdown
+	if dash_cooldown_left > 0:
+		dash_cooldown_left -= delta
 
-	# --- 1. TEST HEALTH SYSTEM WITH 'H' KEY ---
-	# Uses a timer delay (debounce) so holding or tapping 'H' doesn't spam inputs instantly
-	if Input.is_key_pressed(KEY_H) and h_timer <= 0:
-		h_timer = h_delay
-		take_damage(15)
-
-	# --- 2. GET WASD INPUT ---
-	var input_dir = Vector2.ZERO
+	# Gather WASD inputs
+	var direction := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W):
-		input_dir.y -= 1
+		direction.y -= 1
 	if Input.is_key_pressed(KEY_S):
-		input_dir.y += 1
+		direction.y += 1
 	if Input.is_key_pressed(KEY_A):
-		input_dir.x -= 1
+		direction.x -= 1
 	if Input.is_key_pressed(KEY_D):
-		input_dir.x += 1
-	input_dir = input_dir.normalized()
+		direction.x += 1
+	
+	direction = direction.normalized()
 
-	# --- 3. HANDLE DASH MECHANIC (SHIFT) ---
-	var is_dashing = false
-	if Input.is_key_pressed(KEY_SHIFT) and dash_cooldown_timer <= 0 and dash_timer <= 0:
-		if input_dir != Vector2.ZERO:
-			dash_timer = dash_duration
-			dash_cooldown_timer = dash_cooldown
-			dash_direction = input_dir
+	# Remember last direction for dashing when standing still
+	if direction != Vector2.ZERO:
+		last_movement_dir = direction
 
-	# --- 4. APPLY MOVEMENT & PHYSICS ---
-	if dash_timer > 0:
-		# During dash, override velocity completely
-		velocity = dash_direction * dash_speed
+	# Calculate velocity based on state
+	var current_speed = speed
+	if is_dashing:
+		current_speed *= dash_multiplier
+		velocity = last_movement_dir * current_speed
+		dash_time_left -= delta
+		if dash_time_left <= 0:
+			is_dashing = false
 	else:
-		if input_dir != Vector2.ZERO:
-			# Smooth acceleration towards target velocity
-			velocity = velocity.move_toward(input_dir * normal_speed, acceleration * normal_speed * delta)
-		else:
-			# Smooth deceleration (friction) when no keys are pressed
-			velocity = velocity.move_toward(Vector2.ZERO, friction * normal_speed * delta)
+		velocity = direction * current_speed
 
+	# Move the character
 	move_and_slide()
 
-	# Optional: Face the ship toward movement direction or mouse
-	if velocity.length() > 10:
-		rotation = lerp_angle(rotation, velocity.angle() + PI/2, 15 * delta)
-
-# --- HEALTH FUNCTIONS ---
 func take_damage(amount: int) -> void:
-	current_health = max(0, current_health - amount)
-	print("Ouch! Took ", amount, " damage. Health: ", current_health, "/", max_health)
+	current_health -= amount
+	if current_health < 0:
+		current_health = 0
 	
+	print("[TERMINAL] >> HEALTH UPDATE: Took %d damage. Current Health: %d/%d" % [amount, current_health, max_health])
+
 	if current_health <= 0:
-		die()
+		print("[TERMINAL] >> GAME OVER: Health reached 0! Restarting scene...")
+		call_deferred("_restart_game")
 
-func heal(amount: int) -> void:
-	current_health = min(max_health, current_health + amount)
-	print("Healed for ", amount, ". Health: ", current_health, "/", max_health)
-
-func die() -> void:
-	print("Spaceship Destroyed! Game Over.")
-	# Add your respawn, particle explosion, or scene reload logic here
+func _restart_game() -> void:
+	get_tree().reload_current_scene()
